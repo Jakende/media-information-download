@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import argparse
 import os
+import select
 import shutil
 import subprocess
 import sys
+import termios
+import tty
 from pathlib import Path
 
 from media_information_download.config import (
@@ -15,6 +18,34 @@ from media_information_download.config import (
 )
 from media_information_download.output import list_output_files
 from media_information_download.pipeline import MediaPipeline, ProcessOptions
+
+
+BACK = "__back__"
+ESCAPE = "__escape__"
+ENTER = "__enter__"
+UP = "__up__"
+DOWN = "__down__"
+
+MODEL_OPTIONS = ["tiny", "base", "small", "medium", "large"]
+LANGUAGE_OPTIONS: list[tuple[str, str | None]] = [
+    ("Auto detect", None),
+    ("German", "de"),
+    ("English", "en"),
+    ("French", "fr"),
+    ("Spanish", "es"),
+    ("Italian", "it"),
+    ("Portuguese", "pt"),
+    ("Dutch", "nl"),
+    ("Polish", "pl"),
+    ("Turkish", "tr"),
+    ("Swedish", "sv"),
+    ("Danish", "da"),
+    ("Norwegian", "no"),
+    ("Finnish", "fi"),
+    ("Japanese", "ja"),
+    ("Chinese", "zh"),
+    ("Korean", "ko"),
+]
 
 
 class Style:
@@ -67,6 +98,90 @@ def _prompt(label: str) -> str:
     return input(_color(f"{label} ", Style.bold + Style.blue)).strip()
 
 
+def _read_key() -> str:
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        char = sys.stdin.read(1)
+        if char == "\x1b":
+            sequence = ""
+            while select.select([sys.stdin], [], [], 0.03)[0]:
+                sequence += sys.stdin.read(1)
+            if sequence in {"[A", "OA"}:
+                return UP
+            if sequence in {"[B", "OB"}:
+                return DOWN
+            return ESCAPE
+        if char in {"\r", "\n"}:
+            return ENTER
+        if char in {"\x7f", "\b"}:
+            return BACK
+        if char.lower() == "k":
+            return UP
+        if char.lower() == "j":
+            return DOWN
+        return char
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+
+def _clear_screen() -> None:
+    print("\033[2J\033[H", end="")
+
+
+def _select(
+    title: str,
+    options: list[str],
+    *,
+    initial: int = 0,
+    allow_back: bool = True,
+    escape_label: str = "Back",
+) -> int | None:
+    if not sys.stdin.isatty():
+        for index, option in enumerate(options, start=1):
+            print(f"{index}. {option}")
+        raw = _prompt("Choose:")
+        if not raw:
+            return None
+        try:
+            selected = int(raw) - 1
+        except ValueError:
+            return None
+        return selected if 0 <= selected < len(options) else None
+
+    selected = max(0, min(initial, len(options) - 1))
+    while True:
+        _clear_screen()
+        _banner()
+        print(_rule(title))
+        for index, option in enumerate(options):
+            marker = ">" if index == selected else " "
+            line = f" {marker} {option}"
+            if index == selected:
+                print(_color(line, Style.bold + Style.cyan))
+            else:
+                print(line)
+        print()
+        print(_color("Up/Down: move  Enter: select  Backspace: back  Esc: " + escape_label, Style.dim))
+
+        key = _read_key()
+        if key == UP:
+            selected = (selected - 1) % len(options)
+        elif key == DOWN:
+            selected = (selected + 1) % len(options)
+        elif key == ENTER:
+            return selected
+        elif key == BACK and allow_back:
+            return None
+        elif key == ESCAPE:
+            return None
+        elif key.isdigit():
+            numeric = int(key) - 1
+            if 0 <= numeric < len(options):
+                return numeric
+
+
 def _print_progress(message: str) -> None:
     prefix = _color(">", Style.cyan)
     if message.startswith("ERROR"):
@@ -78,11 +193,31 @@ def _print_progress(message: str) -> None:
 
 
 def _yes_no(prompt: str, default: bool = True) -> bool:
-    suffix = "Y/n" if default else "y/N"
-    answer = _prompt(f"{prompt} [{suffix}]:").lower()
-    if not answer:
-        return default
-    return answer in {"y", "yes", "j", "ja"}
+    initial = 0 if default else 1
+    selected = _select(prompt, ["Yes", "No"], initial=initial)
+    return default if selected is None else selected == 0
+
+
+def _choose_model(current_model: str) -> str | None:
+    options = MODEL_OPTIONS.copy()
+    if current_model not in options:
+        options.insert(0, current_model)
+    initial = options.index(current_model) if current_model in options else 0
+    selected = _select("Whisper Model", options, initial=initial)
+    return None if selected is None else options[selected]
+
+
+def _choose_language(current_language: str | None) -> str | None | object:
+    labels = [
+        f"{name} ({code})" if code else name
+        for name, code in LANGUAGE_OPTIONS
+    ]
+    codes = [code for _, code in LANGUAGE_OPTIONS]
+    initial = codes.index(current_language) if current_language in codes else 0
+    selected = _select("Transcription Language", labels, initial=initial)
+    if selected is None:
+        return BACK
+    return codes[selected]
 
 
 def _print_results(results) -> None:
@@ -105,6 +240,8 @@ def _print_results(results) -> None:
 
 def _process_source(source_type: str) -> None:
     label = "YouTube URL(s)" if source_type == "youtube" else "RSS feed URL"
+    _clear_screen()
+    _banner()
     print("\n" + _rule(label))
     raw_input = _prompt(f"{label}:")
     if not raw_input:
@@ -115,12 +252,19 @@ def _process_source(source_type: str) -> None:
     model_name = get_model_name()
     language = get_whisper_language()
     if transcribe:
-        custom_model = _prompt(f"Whisper model [{model_name}]:")
-        if custom_model:
-            model_name = custom_model
-        custom_language = _prompt(f"Language code, empty for auto [{language or 'auto'}]:")
-        language = custom_language or language
+        selected_model = _choose_model(model_name)
+        if selected_model is None:
+            return
+        model_name = selected_model
 
+        selected_language = _choose_language(language)
+        if selected_language == BACK:
+            return
+        language = selected_language
+
+    _clear_screen()
+    _banner()
+    print(_rule("Processing"))
     pipeline = MediaPipeline(progress=_print_progress)
     results = pipeline.process(
         ProcessOptions(
@@ -146,23 +290,21 @@ def _transcribe_existing() -> None:
         print(_color(f"No supported audio files found in {output_dir}", Style.yellow))
         return
 
-    print("\n" + _rule("Audio Files"))
-    for index, path in enumerate(candidates, start=1):
-        print(f"{_color(str(index).rjust(2), Style.cyan)}  {path.name}")
-    raw_selection = _prompt("Select numbers, comma-separated, or 'all':").lower()
-    if raw_selection == "all":
+    options = ["All audio files"] + [path.name for path in candidates]
+    selected_index = _select("Audio Files", options)
+    if selected_index is None:
+        return
+    if selected_index == 0:
         selected = candidates
     else:
-        selected = []
-        for part in raw_selection.split(","):
-            try:
-                selected.append(candidates[int(part.strip()) - 1])
-            except Exception:
-                print(_color(f"Ignoring invalid selection: {part}", Style.yellow))
+        selected = [candidates[selected_index - 1]]
     if not selected:
         print(_color("No files selected.", Style.yellow))
         return
 
+    _clear_screen()
+    _banner()
+    print(_rule("Transcription"))
     pipeline = MediaPipeline(progress=_print_progress)
     results = pipeline.transcribe_existing(selected, output_dir=output_dir)
     _print_results(results)
@@ -196,26 +338,29 @@ def run_tui() -> int:
 
     while True:
         try:
-            print("\n" + _rule("Menu"))
-            print(f"{_color('1', Style.cyan)}  Process YouTube URL")
-            print(f"{_color('2', Style.cyan)}  Process RSS feed URL")
-            print(f"{_color('3', Style.cyan)}  Transcribe existing audio from output")
-            print(f"{_color('4', Style.cyan)}  View output files")
-            print(f"{_color('5', Style.cyan)}  Quit")
-            choice = _prompt("Choose:")
-            if choice == "1":
-                _process_source("youtube")
-            elif choice == "2":
-                _process_source("rss")
-            elif choice == "3":
-                _transcribe_existing()
-            elif choice == "4":
-                _show_outputs()
-            elif choice == "5":
+            choice = _select(
+                "Main Menu",
+                [
+                    "Process YouTube URL",
+                    "Process RSS feed URL",
+                    "Transcribe existing audio from output",
+                    "View output files",
+                    "Quit",
+                ],
+                allow_back=False,
+                escape_label="Quit",
+            )
+            if choice is None or choice == 4:
                 print(_color("Done.", Style.green))
                 return 0
-            else:
-                print(_color("Unknown option.", Style.yellow))
+            if choice == 0:
+                _process_source("youtube")
+            elif choice == 1:
+                _process_source("rss")
+            elif choice == 2:
+                _transcribe_existing()
+            elif choice == 3:
+                _show_outputs()
         except KeyboardInterrupt:
             print(_color("\nInterrupted.", Style.yellow))
         except EOFError:

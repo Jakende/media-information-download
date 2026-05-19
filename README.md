@@ -45,6 +45,13 @@ media-information-download
 
 The TUI lets you choose YouTube or RSS input, start downloads, watch progress messages, trigger transcription, and list or open generated files.
 
+Keyboard controls:
+
+- Up/Down: move through selectable menu items
+- Enter: select
+- Backspace: go back from a submenu or choice screen
+- Escape: cancel/back from submenus; quit from the main menu
+
 ## Non-Interactive Usage
 
 Download and transcribe a YouTube URL:
