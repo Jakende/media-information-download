@@ -75,6 +75,10 @@ def _terminal_width() -> int:
     return min(96, max(64, shutil.get_terminal_size((88, 24)).columns))
 
 
+def _terminal_height() -> int:
+    return max(16, shutil.get_terminal_size((88, 24)).lines)
+
+
 def _rule(label: str = "") -> str:
     width = _terminal_width()
     if not label:
@@ -115,6 +119,17 @@ def _navigation_hint(
     parts.append("Backspace: back")
     parts.append(f"Esc: {escape_label}")
     return "  ".join(parts)
+
+
+def _footer(message: str) -> None:
+    width = shutil.get_terminal_size((88, 24)).columns
+    height = _terminal_height()
+    plain_message = message[: max(1, width - 1)]
+    print(
+        f"\033[{height};1H\033[2K{_color(plain_message, Style.dim)}",
+        end="",
+        flush=True,
+    )
 
 
 def _read_key() -> str:
@@ -196,8 +211,7 @@ def _select(
                 print(_color(line, Style.bold + Style.cyan))
             else:
                 print(line)
-        print()
-        print(_color(_navigation_hint(escape_label=escape_label), Style.dim))
+        _footer(_navigation_hint(escape_label=escape_label))
 
         key = _read_key()
         if key == UP:
@@ -226,19 +240,16 @@ def _text_entry(title: str, label: str) -> str | None:
         _clear_screen()
         _banner()
         print(_rule(title))
-        print(
-            _color(
-                _navigation_hint(
-                    "Type or paste text",
-                    escape_label="Back",
-                    include_arrows=False,
-                ),
-                Style.dim,
-            )
-        )
         print()
         print(_color(label, Style.bold + Style.blue))
         print(value)
+        _footer(
+            _navigation_hint(
+                "Type or paste text",
+                escape_label="Back",
+                include_arrows=False,
+            )
+        )
 
         key = _read_key()
         if key == ENTER:

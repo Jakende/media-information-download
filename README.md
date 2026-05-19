@@ -47,6 +47,7 @@ The TUI lets you choose YouTube or RSS input, start downloads, watch progress me
 
 Keyboard controls:
 
+- Navigation controls are shown at the bottom of the active menu or submenu
 - Up/Down: move through selectable menu items
 - Enter: select
 - Backspace: go back from a submenu or choice screen

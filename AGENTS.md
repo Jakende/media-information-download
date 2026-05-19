@@ -57,7 +57,7 @@ Keep these entry points working:
 - `python3 youtube_download_transcribe.py --url ...`
 - `media-information-download` when installed or linked into zsh `PATH`
 
-The interactive TUI should keep selectable options navigable with Up/Down and Enter. Backspace should go back from submenus or choice screens. Escape should cancel/back from submenus and quit from the main menu. Free-form URL input may remain text entry, but its screen must still show controls and support Backspace/Escape as back actions.
+The interactive TUI should keep selectable options navigable with Up/Down and Enter. Navigation controls should always be shown as a footer at the bottom of the active menu or submenu. Backspace should go back from submenus or choice screens. Escape should cancel/back from submenus and quit from the main menu. Free-form URL input may remain text entry, but its screen must still show controls and support Backspace/Escape as back actions.
 
 ## Verification
 
