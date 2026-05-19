@@ -16,6 +16,7 @@ from media_information_download.tui import (
     UP,
     SpinnerProgress,
     _key_from_escape_sequence,
+    _sanitize_text_entry,
 )
 
 
@@ -42,6 +43,17 @@ class MediaPipelineTests(unittest.TestCase):
         self.assertTrue(SpinnerProgress._is_terminal_message("MP3 ready: Example.mp3"))
         self.assertTrue(SpinnerProgress._is_terminal_message("Transcript written: Example.md"))
         self.assertFalse(SpinnerProgress._is_active_message("Found 1 media item(s)."))
+
+    def test_text_entry_sanitizes_pasted_control_sequences(self) -> None:
+        self.assertEqual(
+            _sanitize_text_entry("https://www.youtube.com/watch?v=abc123\x1b[201~"),
+            "https://www.youtube.com/watch?v=abc123",
+        )
+        self.assertEqual(
+            _sanitize_text_entry("\x1b[200~https://youtu.be/abc\x1b[201~"),
+            "https://youtu.be/abc",
+        )
+        self.assertEqual(_sanitize_text_entry("https://youtu.be/abc\x7f"), "https://youtu.be/abc")
 
     def test_rss_parser_extracts_supported_enclosure(self) -> None:
         feed = b"""<?xml version="1.0"?>

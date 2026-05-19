@@ -27,6 +27,8 @@ ESCAPE = "__escape__"
 ENTER = "__enter__"
 UP = "__up__"
 DOWN = "__down__"
+BRACKETED_PASTE_START = "[200~"
+BRACKETED_PASTE_END = b"\x1b[201~"
 
 VIEWPORT_WIDTH = 88
 VIEWPORT_HEIGHT = 22
@@ -190,7 +192,53 @@ def _footer(message: str) -> None:
     print(f"\033[{row};{column}H{clear}{_color(plain_message, Style.dim)}", end="", flush=True)
 
 
-def _read_key() -> str:
+def _read_bracketed_paste(fd: int) -> str:
+    data = b""
+    while True:
+        chunk = os.read(fd, 1024)
+        if not chunk:
+            break
+        data += chunk
+        end_index = data.find(BRACKETED_PASTE_END)
+        if end_index >= 0:
+            data = data[:end_index]
+            break
+    return data.decode(errors="ignore")
+
+
+def _drain_available_text(fd: int) -> str:
+    data = b""
+    while select.select([sys.stdin], [], [], 0.01)[0]:
+        chunk = os.read(fd, 4096)
+        if not chunk:
+            break
+        data += chunk
+    return data.decode(errors="ignore")
+
+
+def _read_clipboard() -> str:
+    if sys.platform != "darwin":
+        return ""
+    result = subprocess.run(
+        ["pbpaste"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        check=False,
+    )
+    return result.stdout if result.returncode == 0 else ""
+
+
+def _sanitize_text_entry(value: str) -> str:
+    value = value.replace("\x1b[200~", "").replace("\x1b[201~", "")
+    return "".join(
+        char
+        for char in value
+        if char.isprintable() and char not in {"\x1b", "\x7f", "\b"}
+    )
+
+
+def _read_key(*, text_mode: bool = False) -> str:
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     try:
@@ -211,15 +259,22 @@ def _read_key() -> str:
                 if final[-1].isalpha() or final[-1] == "~":
                     break
 
-            return _key_from_escape_sequence(introducer + final)
+            sequence = introducer + final
+            if text_mode and sequence == BRACKETED_PASTE_START:
+                return _read_bracketed_paste(fd)
+            return _key_from_escape_sequence(sequence)
         if char in {"\r", "\n"}:
             return ENTER
         if char in {"\x7f", "\b"}:
             return BACK
-        if char.lower() == "k":
+        if text_mode and char == "\x16":
+            return _read_clipboard()
+        if not text_mode and char.lower() == "k":
             return UP
-        if char.lower() == "j":
+        if not text_mode and char.lower() == "j":
             return DOWN
+        if text_mode and char.isprintable():
+            return char + _drain_available_text(fd)
         return char
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
@@ -299,32 +354,36 @@ def _text_entry(title: str, label: str) -> str | None:
         return value or None
 
     value = ""
-    while True:
-        _clear_framed_screen(title)
-        _viewport_line(0, label, Style.bold + Style.blue)
-        _viewport_line(2, value)
-        _footer(
-            _navigation_hint(
-                "Type or paste text",
-                escape_label="Back",
-                include_arrows=False,
+    print("\033[?2004h", end="", flush=True)
+    try:
+        while True:
+            _clear_framed_screen(title)
+            _viewport_line(0, label, Style.bold + Style.blue)
+            _viewport_line(2, value)
+            _footer(
+                _navigation_hint(
+                    "Type or paste text",
+                    escape_label="Back",
+                    include_arrows=False,
+                )
             )
-        )
 
-        key = _read_key()
-        if key == ENTER:
-            return value.strip() or None
-        if key in {BACK, ESCAPE}:
-            return None
-        if key in {UP, DOWN}:
-            continue
-        if key == "\x15":
-            value = ""
-            continue
-        if key == "\x03":
-            raise KeyboardInterrupt
-        if key.isprintable():
-            value += key
+            key = _read_key(text_mode=True)
+            if key == ENTER:
+                return value.strip() or None
+            if key in {BACK, ESCAPE}:
+                return None
+            if key in {UP, DOWN}:
+                continue
+            if key == "\x15":
+                value = ""
+                continue
+            if key == "\x03":
+                raise KeyboardInterrupt
+            if key:
+                value += _sanitize_text_entry(key)
+    finally:
+        print("\033[?2004l", end="", flush=True)
 
 
 def _print_progress(message: str) -> None:

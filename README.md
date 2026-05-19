@@ -55,6 +55,7 @@ Keyboard controls:
 - Backspace: go back from a submenu or choice screen
 - Escape: cancel/back from submenus; quit from the main menu
 - URL entry screens show their own controls: type or paste text, Enter continues, Backspace/Escape goes back
+- Paste is supported in URL entry screens, including terminal bracketed paste and macOS clipboard paste
 
 ## Non-Interactive Usage
 
