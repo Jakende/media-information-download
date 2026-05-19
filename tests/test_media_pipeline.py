@@ -10,6 +10,7 @@ from pathlib import Path
 from media_information_download.audio import convert_to_mp3
 from media_information_download.sources.rss import parse_feed_xml
 from media_information_download.sources.youtube import validate_url
+from media_information_download.tui import DOWN, ESCAPE, UP, _key_from_escape_sequence
 
 
 class MediaPipelineTests(unittest.TestCase):
@@ -17,6 +18,15 @@ class MediaPipelineTests(unittest.TestCase):
         self.assertTrue(validate_url("https://www.youtube.com/watch?v=abcdefghijk"))
         self.assertTrue(validate_url("https://youtu.be/abcdefghijk"))
         self.assertFalse(validate_url("https://example.com/video"))
+
+    def test_tui_arrow_escape_sequences_do_not_map_to_escape(self) -> None:
+        self.assertEqual(_key_from_escape_sequence("[A"), UP)
+        self.assertEqual(_key_from_escape_sequence("OA"), UP)
+        self.assertEqual(_key_from_escape_sequence("[B"), DOWN)
+        self.assertEqual(_key_from_escape_sequence("OB"), DOWN)
+        self.assertEqual(_key_from_escape_sequence("[1;5A"), UP)
+        self.assertEqual(_key_from_escape_sequence("[1;5B"), DOWN)
+        self.assertEqual(_key_from_escape_sequence("[C"), ESCAPE)
 
     def test_rss_parser_extracts_supported_enclosure(self) -> None:
         feed = b"""<?xml version="1.0"?>

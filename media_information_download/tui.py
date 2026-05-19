@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import termios
+import time
 import tty
 from pathlib import Path
 
@@ -103,16 +104,23 @@ def _read_key() -> str:
     old_settings = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
-        char = sys.stdin.read(1)
+        char = os.read(fd, 1).decode(errors="ignore")
         if char == "\x1b":
-            sequence = ""
-            while select.select([sys.stdin], [], [], 0.03)[0]:
-                sequence += sys.stdin.read(1)
-            if sequence in {"[A", "OA"}:
-                return UP
-            if sequence in {"[B", "OB"}:
-                return DOWN
-            return ESCAPE
+            time.sleep(0.06)
+            if not select.select([sys.stdin], [], [], 0.35)[0]:
+                return ESCAPE
+
+            introducer = os.read(fd, 1).decode(errors="ignore")
+            if introducer not in {"[", "O"}:
+                return ESCAPE
+
+            final = ""
+            while select.select([sys.stdin], [], [], 0.10)[0]:
+                final += os.read(fd, 1).decode(errors="ignore")
+                if final[-1].isalpha() or final[-1] == "~":
+                    break
+
+            return _key_from_escape_sequence(introducer + final)
         if char in {"\r", "\n"}:
             return ENTER
         if char in {"\x7f", "\b"}:
@@ -124,6 +132,14 @@ def _read_key() -> str:
         return char
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+
+def _key_from_escape_sequence(sequence: str) -> str:
+    if sequence in {"[A", "OA", "[1A", "[1;2A", "[1;3A", "[1;5A"}:
+        return UP
+    if sequence in {"[B", "OB", "[1B", "[1;2B", "[1;3B", "[1;5B"}:
+        return DOWN
+    return ESCAPE
 
 
 def _clear_screen() -> None:
