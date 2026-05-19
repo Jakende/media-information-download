@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import select
 import shutil
@@ -22,6 +23,7 @@ from media_information_download.output import list_output_files
 from media_information_download.pipeline import MediaPipeline, ProcessOptions
 
 
+UI_OUT = sys.__stdout__
 BACK = "__back__"
 ESCAPE = "__escape__"
 ENTER = "__enter__"
@@ -72,7 +74,7 @@ class Style:
 
 
 def _supports_color() -> bool:
-    return sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+    return UI_OUT.isatty() and os.environ.get("NO_COLOR") is None
 
 
 def _color(value: str, style: str) -> str:
@@ -112,6 +114,11 @@ def _visible_slice(value: str, width: int) -> str:
     return value[: max(0, width)]
 
 
+def _ui_print(*args, **kwargs) -> None:
+    kwargs.setdefault("file", UI_OUT)
+    print(*args, **kwargs)
+
+
 def _draw_viewport(title: str) -> tuple[int, int, int, int]:
     top, left, width, height = _viewport_geometry()
     inner_width = width - 2
@@ -125,13 +132,13 @@ def _draw_viewport(title: str) -> tuple[int, int, int, int]:
     title_start = max(0, (inner_width - len(title_text)) // 2)
     top_rule = top_rule[:title_start] + title_text + top_rule[title_start + len(title_text):]
 
-    print(_move(top, left) + _color("+" + top_rule + "+", Style.cyan), end="")
+    _ui_print(_move(top, left) + _color("+" + top_rule + "+", Style.cyan), end="")
     for row in range(top + 1, bottom):
-        print(_move(row, left) + _color("|", Style.cyan), end="")
-        print(" " * inner_width, end="")
-        print(_color("|", Style.cyan), end="")
-    print(_move(bottom, left) + _color("+" + "-" * inner_width + "+", Style.cyan), end="")
-    print(_move(top + 2, left + 2), end="", flush=True)
+        _ui_print(_move(row, left) + _color("|", Style.cyan), end="")
+        _ui_print(" " * inner_width, end="")
+        _ui_print(_color("|", Style.cyan), end="")
+    _ui_print(_move(bottom, left) + _color("+" + "-" * inner_width + "+", Style.cyan), end="")
+    _ui_print(_move(top + 2, left + 2), end="", flush=True)
     return top, left, width, height
 
 
@@ -141,7 +148,7 @@ def _viewport_line(row_offset: int, text: str = "", style: str | None = None) ->
     text = _visible_slice(text, inner_width).ljust(inner_width)
     if style:
         text = _color(text, style)
-    print(_move(top + 2 + row_offset, left + 2) + text, end="")
+    _ui_print(_move(top + 2 + row_offset, left + 2) + text, end="")
 
 
 def _rule(label: str = "") -> str:
@@ -158,10 +165,10 @@ def _banner() -> None:
     width = _terminal_width()
     title = "MEDIA INFORMATION DOWNLOAD"
     subtitle = "YouTube + RSS -> MP3 -> Whisper Markdown"
-    print(_color("=" * width, Style.cyan))
-    print(_color(title.center(width), Style.bold + Style.cyan))
-    print(_color(subtitle.center(width), Style.dim))
-    print(_color("=" * width, Style.cyan))
+    _ui_print(_color("=" * width, Style.cyan))
+    _ui_print(_color(title.center(width), Style.bold + Style.cyan))
+    _ui_print(_color(subtitle.center(width), Style.dim))
+    _ui_print(_color("=" * width, Style.cyan))
 
 
 def _prompt(label: str) -> str:
@@ -199,7 +206,7 @@ def _footer(message: str) -> None:
 
     plain_message = message[: max(1, max_width)].ljust(max_width)
     clear = "" if sys.stdout.isatty() else "\033[2K"
-    print(f"\033[{row};{column}H{clear}{_color(plain_message, Style.dim)}", end="", flush=True)
+    _ui_print(f"\033[{row};{column}H{clear}{_color(plain_message, Style.dim)}", end="", flush=True)
 
 
 def _read_bracketed_paste(fd: int) -> str:
@@ -246,6 +253,17 @@ def _sanitize_text_entry(value: str) -> str:
         for char in value
         if char.isprintable() and char not in {"\x1b", "\x7f", "\b"}
     )
+
+
+@contextlib.contextmanager
+def _suppress_external_output(enabled: bool):
+    if not enabled:
+        yield
+        return
+
+    with open(os.devnull, "w", encoding="utf-8") as devnull:
+        with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
+            yield
 
 
 def _read_key(*, text_mode: bool = False) -> str:
@@ -299,7 +317,7 @@ def _key_from_escape_sequence(sequence: str) -> str:
 
 
 def _clear_screen() -> None:
-    print("\033[2J\033[H", end="")
+    _ui_print("\033[2J\033[H", end="")
 
 
 def _clear_framed_screen(title: str) -> None:
@@ -642,16 +660,17 @@ def _process_source(source_type: str) -> None:
     progress = SpinnerProgress()
     try:
         pipeline = MediaPipeline(progress=progress)
-        results = pipeline.process(
-            ProcessOptions(
-                source_type=source_type,
-                raw_input=raw_input,
-                output_dir=get_output_dir(),
-                transcribe=transcribe,
-                model_name=model_name,
-                language=language,
+        with _suppress_external_output(sys.stdout.isatty()):
+            results = pipeline.process(
+                ProcessOptions(
+                    source_type=source_type,
+                    raw_input=raw_input,
+                    output_dir=get_output_dir(),
+                    transcribe=transcribe,
+                    model_name=model_name,
+                    language=language,
+                )
             )
-        )
     finally:
         progress.stop()
     _print_results(results)
@@ -689,7 +708,8 @@ def _transcribe_existing() -> None:
     progress = SpinnerProgress()
     try:
         pipeline = MediaPipeline(progress=progress)
-        results = pipeline.transcribe_existing(selected, output_dir=output_dir)
+        with _suppress_external_output(sys.stdout.isatty()):
+            results = pipeline.transcribe_existing(selected, output_dir=output_dir)
     finally:
         progress.stop()
     _print_results(results)
@@ -793,17 +813,18 @@ def run_non_interactive(args: argparse.Namespace) -> int:
     progress = SpinnerProgress()
     try:
         pipeline = MediaPipeline(progress=progress)
-        results = pipeline.process(
-            ProcessOptions(
-                source_type=args.source,
-                raw_input=args.url,
-                output_dir=get_output_dir(),
-                transcribe=not args.no_transcribe,
-                model_name=args.model or get_model_name(),
-                language=args.language if args.language is not None else get_whisper_language(),
-                delay_seconds=args.delay,
+        with _suppress_external_output(sys.stdout.isatty()):
+            results = pipeline.process(
+                ProcessOptions(
+                    source_type=args.source,
+                    raw_input=args.url,
+                    output_dir=get_output_dir(),
+                    transcribe=not args.no_transcribe,
+                    model_name=args.model or get_model_name(),
+                    language=args.language if args.language is not None else get_whisper_language(),
+                    delay_seconds=args.delay,
+                )
             )
-        )
     finally:
         progress.stop()
     _print_results(results)
