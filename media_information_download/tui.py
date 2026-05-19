@@ -407,7 +407,12 @@ def _print_progress(message: str) -> None:
 
 
 class SpinnerProgress:
-    frames = ("|", "/", "-", "\\")
+    frames = (
+        "[#####-----]",
+        "[--#####---]",
+        "[----#####-]",
+        "[---#####--]",
+    )
     active_prefixes = (
         "Downloading:",
         "Converting to MP3:",
@@ -427,6 +432,7 @@ class SpinnerProgress:
         self._thread: threading.Thread | None = None
         self._message = ""
         self._frame_index = 0
+        self._log_messages: list[str] = []
 
     def __call__(self, message: str) -> None:
         if not self._enabled:
@@ -439,11 +445,11 @@ class SpinnerProgress:
 
         if self._is_terminal_message(message):
             self.stop()
-            _print_progress(message)
+            self._append_log(self._format_log_message(message))
             return
 
         self.stop()
-        _print_progress(message)
+        self._append_log(self._format_log_message(message))
 
     def stop(self) -> None:
         thread = self._thread
@@ -454,12 +460,12 @@ class SpinnerProgress:
         thread.join(timeout=1)
         self._thread = None
         self._stop_event.clear()
-        width = shutil.get_terminal_size((88, 24)).columns
-        print("\r" + " " * max(1, width - 1) + "\r", end="", flush=True)
+        _viewport_line(0, "")
 
     def _start(self, message: str) -> None:
         with self._lock:
             self._message = message
+        self._render_active(message)
         if self._thread is not None and self._thread.is_alive():
             return
 
@@ -473,10 +479,47 @@ class SpinnerProgress:
                 message = self._message
             frame = self.frames[self._frame_index % len(self.frames)]
             self._frame_index += 1
-            line = f"  {_color(frame, Style.cyan)} {message}"
-            width = shutil.get_terminal_size((88, 24)).columns
-            print("\r" + line[: max(1, width - 1)], end="", flush=True)
-            self._stop_event.wait(0.12)
+            self._render_active(message, frame=frame)
+            self._stop_event.wait(0.18)
+
+    def _render_active(self, message: str, frame: str | None = None) -> None:
+        frame = frame or self.frames[self._frame_index % len(self.frames)]
+        phase = self._active_phase(message)
+        _viewport_line(0, f"WORKING {frame} {phase}", Style.bold + Style.cyan)
+        _viewport_line(1, message, Style.cyan)
+
+    def _append_log(self, message: str) -> None:
+        self._log_messages.append(message)
+        _, _, _, height = _viewport_geometry()
+        max_rows = max(4, height - 8)
+        recent = self._log_messages[-max_rows:]
+        for row in range(max_rows):
+            value = recent[row] if row < len(recent) else ""
+            style = None
+            if value.startswith("!"):
+                style = Style.red
+            elif value.startswith("+"):
+                style = Style.green
+            elif value.startswith(">"):
+                style = Style.cyan
+            _viewport_line(row + 3, value, style)
+
+    @staticmethod
+    def _active_phase(message: str) -> str:
+        stripped = message.split("] ", maxsplit=1)[-1]
+        return stripped.split(":", maxsplit=1)[0].upper()
+
+    @staticmethod
+    def _format_log_message(message: str) -> str:
+        if message.startswith("ERROR:"):
+            return f"! {message}"
+        if (
+            message.startswith("Downloaded:")
+            or message.startswith("MP3 ready:")
+            or message.startswith("Transcript written:")
+        ):
+            return f"+ {message}"
+        return f"> {message}"
 
     @classmethod
     def _is_active_message(cls, message: str) -> bool:
@@ -517,6 +560,42 @@ def _choose_language(current_language: str | None) -> str | None | object:
 
 
 def _print_results(results) -> None:
+    if sys.stdout.isatty():
+        _clear_framed_screen("Results")
+        row = 0
+        _, _, _, height = _viewport_geometry()
+        max_rows = max(4, height - 5)
+        for result in results:
+            if row >= max_rows:
+                _viewport_line(row, "... more result details omitted", Style.dim)
+                break
+            title = result.item.title
+            if result.error:
+                _viewport_line(row, f"x {title}: {result.error}", Style.red)
+                row += 1
+                for note in result.notes:
+                    if row >= max_rows:
+                        break
+                    _viewport_line(row, f"  {note}", Style.yellow)
+                    row += 1
+                continue
+
+            _viewport_line(row, f"+ {title}", Style.green)
+            row += 1
+            for label, path in (
+                ("media", result.downloaded_path),
+                ("mp3", result.mp3_path),
+                ("transcript", result.transcript_path),
+            ):
+                if path and row < max_rows:
+                    _viewport_line(row, f"  {label:<10} {path}", Style.dim)
+                    row += 1
+        _footer("Enter: continue  Backspace: back  Esc: Back")
+        key = _read_key()
+        while key not in {ENTER, BACK, ESCAPE}:
+            key = _read_key()
+        return
+
     print("\n" + _rule("Results"))
     for result in results:
         title = result.item.title
@@ -709,6 +788,8 @@ def run_tui() -> int:
 
 
 def run_non_interactive(args: argparse.Namespace) -> int:
+    if sys.stdout.isatty():
+        _clear_framed_screen("Processing")
     progress = SpinnerProgress()
     try:
         pipeline = MediaPipeline(progress=progress)

@@ -61,7 +61,7 @@ The interactive TUI should render inside a left-aligned framed viewport within t
 
 URL entry must support paste reliably. Keep bracketed paste enabled during text-entry screens and avoid mapping text-entry characters such as `j` or `k` to navigation.
 
-Long-running processing stages should provide visible feedback in the terminal. Keep the spinner active for download, MP3 conversion, and transcription stages, and stop it before printing completed/error status lines.
+Long-running processing stages should provide visible feedback in the terminal. Keep the framed `WORKING` activity bar active for download, MP3 conversion, and transcription stages, and stop it before printing completed/error status lines. Suppress third-party progress output that would write outside the viewport.
 
 ## Verification
 

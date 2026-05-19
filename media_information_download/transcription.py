@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 from pathlib import Path
 from typing import Any
@@ -101,6 +102,8 @@ class WhisperTranscriber:
         if self.language:
             options["language"] = self.language
 
-        result = self._model.transcribe(str(audio_path), **options)
+        with open(os.devnull, "w", encoding="utf-8") as devnull:
+            with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
+                result = self._model.transcribe(str(audio_path), **options)
         detected_language = (result.get("language") or self.language or "unknown").strip()
         return result, detected_language, self.device
