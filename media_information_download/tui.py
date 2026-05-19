@@ -28,6 +28,9 @@ ENTER = "__enter__"
 UP = "__up__"
 DOWN = "__down__"
 
+VIEWPORT_WIDTH = 88
+VIEWPORT_HEIGHT = 22
+
 MODEL_OPTIONS = ["tiny", "base", "small", "medium", "large"]
 LANGUAGE_OPTIONS: list[tuple[str, str | None]] = [
     ("Auto detect", None),
@@ -80,6 +83,55 @@ def _terminal_height() -> int:
     return max(16, shutil.get_terminal_size((88, 24)).lines)
 
 
+def _viewport_geometry() -> tuple[int, int, int, int]:
+    terminal = shutil.get_terminal_size((100, 30))
+    width = min(VIEWPORT_WIDTH, max(50, terminal.columns - 2))
+    height = min(VIEWPORT_HEIGHT, max(14, terminal.lines - 2))
+    left = max(1, ((terminal.columns - width) // 2) + 1)
+    top = max(1, ((terminal.lines - height) // 2) + 1)
+    return top, left, width, height
+
+
+def _move(row: int, column: int) -> str:
+    return f"\033[{row};{column}H"
+
+
+def _visible_slice(value: str, width: int) -> str:
+    return value[: max(0, width)]
+
+
+def _draw_viewport(title: str) -> tuple[int, int, int, int]:
+    top, left, width, height = _viewport_geometry()
+    inner_width = width - 2
+    bottom = top + height - 1
+    right = left + width - 1
+    title_text = f" {title} "
+    if len(title_text) > inner_width:
+        title_text = title_text[:inner_width]
+
+    top_rule = "-" * inner_width
+    title_start = max(0, (inner_width - len(title_text)) // 2)
+    top_rule = top_rule[:title_start] + title_text + top_rule[title_start + len(title_text):]
+
+    print(_move(top, left) + _color("+" + top_rule + "+", Style.cyan), end="")
+    for row in range(top + 1, bottom):
+        print(_move(row, left) + _color("|", Style.cyan), end="")
+        print(" " * inner_width, end="")
+        print(_color("|", Style.cyan), end="")
+    print(_move(bottom, left) + _color("+" + "-" * inner_width + "+", Style.cyan), end="")
+    print(_move(top + 2, left + 2), end="", flush=True)
+    return top, left, width, height
+
+
+def _viewport_line(row_offset: int, text: str = "", style: str | None = None) -> None:
+    top, left, width, _ = _viewport_geometry()
+    inner_width = width - 4
+    text = _visible_slice(text, inner_width).ljust(inner_width)
+    if style:
+        text = _color(text, style)
+    print(_move(top + 2 + row_offset, left + 2) + text, end="")
+
+
 def _rule(label: str = "") -> str:
     width = _terminal_width()
     if not label:
@@ -123,14 +175,19 @@ def _navigation_hint(
 
 
 def _footer(message: str) -> None:
-    width = shutil.get_terminal_size((88, 24)).columns
-    height = _terminal_height()
-    plain_message = message[: max(1, width - 1)]
-    print(
-        f"\033[{height};1H\033[2K{_color(plain_message, Style.dim)}",
-        end="",
-        flush=True,
-    )
+    if sys.stdout.isatty():
+        top, left, width, height = _viewport_geometry()
+        row = top + height - 2
+        column = left + 2
+        max_width = width - 4
+    else:
+        row = _terminal_height()
+        column = 1
+        max_width = shutil.get_terminal_size((88, 24)).columns - 1
+
+    plain_message = message[: max(1, max_width)].ljust(max_width)
+    clear = "" if sys.stdout.isatty() else "\033[2K"
+    print(f"\033[{row};{column}H{clear}{_color(plain_message, Style.dim)}", end="", flush=True)
 
 
 def _read_key() -> str:
@@ -180,6 +237,11 @@ def _clear_screen() -> None:
     print("\033[2J\033[H", end="")
 
 
+def _clear_framed_screen(title: str) -> None:
+    _clear_screen()
+    _draw_viewport(title)
+
+
 def _select(
     title: str,
     options: list[str],
@@ -202,16 +264,16 @@ def _select(
 
     selected = max(0, min(initial, len(options) - 1))
     while True:
-        _clear_screen()
-        _banner()
-        print(_rule(title))
+        _clear_framed_screen(title)
+        row = 0
         for index, option in enumerate(options):
             marker = ">" if index == selected else " "
             line = f" {marker} {option}"
             if index == selected:
-                print(_color(line, Style.bold + Style.cyan))
+                _viewport_line(row, line, Style.bold + Style.cyan)
             else:
-                print(line)
+                _viewport_line(row, line)
+            row += 1
         _footer(_navigation_hint(escape_label=escape_label))
 
         key = _read_key()
@@ -238,12 +300,9 @@ def _text_entry(title: str, label: str) -> str | None:
 
     value = ""
     while True:
-        _clear_screen()
-        _banner()
-        print(_rule(title))
-        print()
-        print(_color(label, Style.bold + Style.blue))
-        print(value)
+        _clear_framed_screen(title)
+        _viewport_line(0, label, Style.bold + Style.blue)
+        _viewport_line(2, value)
         _footer(
             _navigation_hint(
                 "Type or paste text",
@@ -426,9 +485,12 @@ def _process_source(source_type: str) -> None:
             return
         language = selected_language
 
-    _clear_screen()
-    _banner()
-    print(_rule("Processing"))
+    if sys.stdout.isatty():
+        _clear_framed_screen("Processing")
+    else:
+        _clear_screen()
+        _banner()
+        print(_rule("Processing"))
     progress = SpinnerProgress()
     try:
         pipeline = MediaPipeline(progress=progress)
@@ -470,9 +532,12 @@ def _transcribe_existing() -> None:
         print(_color("No files selected.", Style.yellow))
         return
 
-    _clear_screen()
-    _banner()
-    print(_rule("Transcription"))
+    if sys.stdout.isatty():
+        _clear_framed_screen("Transcription")
+    else:
+        _clear_screen()
+        _banner()
+        print(_rule("Transcription"))
     progress = SpinnerProgress()
     try:
         pipeline = MediaPipeline(progress=progress)
@@ -486,27 +551,59 @@ def _show_outputs() -> None:
     output_dir = get_output_dir()
     files = list_output_files(output_dir)
     if not files:
-        print(_color(f"No output files in {output_dir}", Style.yellow))
+        if sys.stdout.isatty():
+            _clear_framed_screen("Output Files")
+            _viewport_line(0, f"No output files in {output_dir}", Style.yellow)
+            _footer("Backspace/Esc: back")
+            while _read_key() not in {BACK, ESCAPE, ENTER}:
+                pass
+        else:
+            print(_color(f"No output files in {output_dir}", Style.yellow))
         return
 
-    print("\n" + _rule("Output Files"))
-    print(_color(str(output_dir), Style.dim))
-    for path in files:
-        print(f"{_color('-', Style.cyan)} {path.name}")
+    if sys.stdout.isatty():
+        _clear_framed_screen("Output Files")
+        _viewport_line(0, str(output_dir), Style.dim)
+        _, _, _, height = _viewport_geometry()
+        max_files = max(1, height - 8)
+        for index, path in enumerate(files[:max_files], start=2):
+            _viewport_line(index, f"- {path.name}")
+        remaining = len(files) - max_files
+        if remaining > 0:
+            _viewport_line(max_files + 3, f"... {remaining} more file(s)", Style.dim)
+        _footer("Enter: continue  Backspace: back  Esc: Back")
+        key = _read_key()
+        while key not in {ENTER, BACK, ESCAPE}:
+            key = _read_key()
+        if key in {BACK, ESCAPE}:
+            return
+    else:
+        print("\n" + _rule("Output Files"))
+        print(_color(str(output_dir), Style.dim))
+        for path in files:
+            print(f"{_color('-', Style.cyan)} {path.name}")
 
     if sys.platform == "darwin" and _yes_no("Open output folder in Finder", default=False):
         subprocess.run(["open", str(output_dir)], check=False)
 
 
 def run_tui() -> int:
-    _banner()
-    print(f"{_color('Output', Style.dim)} {get_output_dir()}")
     status = dependency_status(include_transcription=False)
     if status:
-        print("\n" + _rule("Environment Warnings"))
-        for message in status:
-            print(f"{_color('!', Style.yellow)} {message}")
-        print(_color("Use ./run.sh so Python dependencies come from the local project venv.", Style.yellow))
+        if sys.stdout.isatty():
+            _clear_framed_screen("Environment Warnings")
+            for index, message in enumerate(status[:8]):
+                _viewport_line(index, f"! {message}", Style.yellow)
+            _footer("Use ./run.sh for the local project venv  Enter: continue")
+            while _read_key() not in {ENTER, ESCAPE, BACK}:
+                pass
+        else:
+            _banner()
+            print(f"{_color('Output', Style.dim)} {get_output_dir()}")
+            print("\n" + _rule("Environment Warnings"))
+            for message in status:
+                print(f"{_color('!', Style.yellow)} {message}")
+            print(_color("Use ./run.sh so Python dependencies come from the local project venv.", Style.yellow))
 
     while True:
         try:
