@@ -45,7 +45,7 @@ media-information-download
 
 The TUI lets you choose YouTube or RSS input, start downloads, watch progress messages, trigger transcription, and list or open generated files.
 Long-running download, MP3 conversion, and transcription steps show a small spinner while active.
-Interactive screens render inside a fixed framed viewport in the current terminal window.
+Interactive screens render inside a left-aligned framed viewport that resizes with the current terminal window.
 
 Keyboard controls:
 

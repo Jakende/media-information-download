@@ -57,7 +57,7 @@ Keep these entry points working:
 - `python3 youtube_download_transcribe.py --url ...`
 - `media-information-download` when installed or linked into zsh `PATH`
 
-The interactive TUI should render inside a fixed framed viewport within the current terminal window. Keep selectable options navigable with Up/Down and Enter. Navigation controls should always be shown as a footer at the bottom of the active menu or submenu. Backspace should go back from submenus or choice screens. Escape should cancel/back from submenus and quit from the main menu. Free-form URL input may remain text entry, but its screen must still show controls and support Backspace/Escape as back actions.
+The interactive TUI should render inside a left-aligned framed viewport within the current terminal window. The viewport should resize responsively with terminal dimensions while staying within sensible min/max bounds. Keep selectable options navigable with Up/Down and Enter. Navigation controls should always be shown as a footer at the bottom of the active menu or submenu. Backspace should go back from submenus or choice screens. Escape should cancel/back from submenus and quit from the main menu. Free-form URL input may remain text entry, but its screen must still show controls and support Backspace/Escape as back actions.
 
 URL entry must support paste reliably. Keep bracketed paste enabled during text-entry screens and avoid mapping text-entry characters such as `j` or `k` to navigation.
 

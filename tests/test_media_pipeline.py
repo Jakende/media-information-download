@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import unittest
 import wave
+import os
 from pathlib import Path
 
 from media_information_download.audio import convert_to_mp3
@@ -17,6 +18,7 @@ from media_information_download.tui import (
     SpinnerProgress,
     _key_from_escape_sequence,
     _sanitize_text_entry,
+    _viewport_geometry,
 )
 
 
@@ -54,6 +56,14 @@ class MediaPipelineTests(unittest.TestCase):
             "https://youtu.be/abc",
         )
         self.assertEqual(_sanitize_text_entry("https://youtu.be/abc\x7f"), "https://youtu.be/abc")
+
+    def test_viewport_geometry_is_left_aligned_and_responsive(self) -> None:
+        large = _viewport_geometry(os.terminal_size((160, 50)))
+        small = _viewport_geometry(os.terminal_size((70, 20)))
+        self.assertEqual(large[1], 2)
+        self.assertEqual(small[1], 2)
+        self.assertGreater(large[2], small[2])
+        self.assertGreater(large[3], small[3])
 
     def test_rss_parser_extracts_supported_enclosure(self) -> None:
         feed = b"""<?xml version="1.0"?>

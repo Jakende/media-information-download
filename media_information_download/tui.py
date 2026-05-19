@@ -30,8 +30,12 @@ DOWN = "__down__"
 BRACKETED_PASTE_START = "[200~"
 BRACKETED_PASTE_END = b"\x1b[201~"
 
-VIEWPORT_WIDTH = 88
-VIEWPORT_HEIGHT = 22
+VIEWPORT_MIN_WIDTH = 56
+VIEWPORT_MAX_WIDTH = 118
+VIEWPORT_MIN_HEIGHT = 14
+VIEWPORT_MAX_HEIGHT = 30
+VIEWPORT_LEFT_MARGIN = 2
+VIEWPORT_TOP_MARGIN = 2
 
 MODEL_OPTIONS = ["tiny", "base", "small", "medium", "large"]
 LANGUAGE_OPTIONS: list[tuple[str, str | None]] = [
@@ -85,12 +89,18 @@ def _terminal_height() -> int:
     return max(16, shutil.get_terminal_size((88, 24)).lines)
 
 
-def _viewport_geometry() -> tuple[int, int, int, int]:
-    terminal = shutil.get_terminal_size((100, 30))
-    width = min(VIEWPORT_WIDTH, max(50, terminal.columns - 2))
-    height = min(VIEWPORT_HEIGHT, max(14, terminal.lines - 2))
-    left = max(1, ((terminal.columns - width) // 2) + 1)
-    top = max(1, ((terminal.lines - height) // 2) + 1)
+def _clamp(value: int, minimum: int, maximum: int) -> int:
+    return max(minimum, min(value, maximum))
+
+
+def _viewport_geometry(size: os.terminal_size | None = None) -> tuple[int, int, int, int]:
+    terminal = size or shutil.get_terminal_size((100, 30))
+    available_width = max(20, terminal.columns - VIEWPORT_LEFT_MARGIN)
+    available_height = max(10, terminal.lines - VIEWPORT_TOP_MARGIN)
+    width = _clamp(available_width, min(VIEWPORT_MIN_WIDTH, available_width), VIEWPORT_MAX_WIDTH)
+    height = _clamp(available_height, min(VIEWPORT_MIN_HEIGHT, available_height), VIEWPORT_MAX_HEIGHT)
+    left = max(1, min(VIEWPORT_LEFT_MARGIN, terminal.columns - width + 1))
+    top = max(1, min(VIEWPORT_TOP_MARGIN, terminal.lines - height + 1))
     return top, left, width, height
 
 
