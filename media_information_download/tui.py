@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import termios
+import threading
 import time
 import tty
 from pathlib import Path
@@ -277,6 +278,88 @@ def _print_progress(message: str) -> None:
     print(f"  {prefix} {message}", flush=True)
 
 
+class SpinnerProgress:
+    frames = ("|", "/", "-", "\\")
+    active_prefixes = (
+        "Downloading:",
+        "Converting to MP3:",
+        "Transcribing:",
+    )
+    terminal_prefixes = (
+        "Downloaded:",
+        "MP3 ready:",
+        "Transcript written:",
+        "ERROR:",
+    )
+
+    def __init__(self) -> None:
+        self._enabled = sys.stdout.isatty()
+        self._lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._message = ""
+        self._frame_index = 0
+
+    def __call__(self, message: str) -> None:
+        if not self._enabled:
+            _print_progress(message)
+            return
+
+        if self._is_active_message(message):
+            self._start(message)
+            return
+
+        if self._is_terminal_message(message):
+            self.stop()
+            _print_progress(message)
+            return
+
+        self.stop()
+        _print_progress(message)
+
+    def stop(self) -> None:
+        thread = self._thread
+        if thread is None:
+            return
+
+        self._stop_event.set()
+        thread.join(timeout=1)
+        self._thread = None
+        self._stop_event.clear()
+        width = shutil.get_terminal_size((88, 24)).columns
+        print("\r" + " " * max(1, width - 1) + "\r", end="", flush=True)
+
+    def _start(self, message: str) -> None:
+        with self._lock:
+            self._message = message
+        if self._thread is not None and self._thread.is_alive():
+            return
+
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop_event.is_set():
+            with self._lock:
+                message = self._message
+            frame = self.frames[self._frame_index % len(self.frames)]
+            self._frame_index += 1
+            line = f"  {_color(frame, Style.cyan)} {message}"
+            width = shutil.get_terminal_size((88, 24)).columns
+            print("\r" + line[: max(1, width - 1)], end="", flush=True)
+            self._stop_event.wait(0.12)
+
+    @classmethod
+    def _is_active_message(cls, message: str) -> bool:
+        stripped = message.split("] ", maxsplit=1)[-1]
+        return stripped.startswith(cls.active_prefixes)
+
+    @classmethod
+    def _is_terminal_message(cls, message: str) -> bool:
+        return message.startswith(cls.terminal_prefixes)
+
+
 def _yes_no(prompt: str, default: bool = True) -> bool:
     initial = 0 if default else 1
     selected = _select(prompt, ["Yes", "No"], initial=initial)
@@ -346,17 +429,21 @@ def _process_source(source_type: str) -> None:
     _clear_screen()
     _banner()
     print(_rule("Processing"))
-    pipeline = MediaPipeline(progress=_print_progress)
-    results = pipeline.process(
-        ProcessOptions(
-            source_type=source_type,
-            raw_input=raw_input,
-            output_dir=get_output_dir(),
-            transcribe=transcribe,
-            model_name=model_name,
-            language=language,
+    progress = SpinnerProgress()
+    try:
+        pipeline = MediaPipeline(progress=progress)
+        results = pipeline.process(
+            ProcessOptions(
+                source_type=source_type,
+                raw_input=raw_input,
+                output_dir=get_output_dir(),
+                transcribe=transcribe,
+                model_name=model_name,
+                language=language,
+            )
         )
-    )
+    finally:
+        progress.stop()
     _print_results(results)
 
 
@@ -386,8 +473,12 @@ def _transcribe_existing() -> None:
     _clear_screen()
     _banner()
     print(_rule("Transcription"))
-    pipeline = MediaPipeline(progress=_print_progress)
-    results = pipeline.transcribe_existing(selected, output_dir=output_dir)
+    progress = SpinnerProgress()
+    try:
+        pipeline = MediaPipeline(progress=progress)
+        results = pipeline.transcribe_existing(selected, output_dir=output_dir)
+    finally:
+        progress.stop()
     _print_results(results)
 
 
@@ -452,18 +543,22 @@ def run_tui() -> int:
 
 
 def run_non_interactive(args: argparse.Namespace) -> int:
-    pipeline = MediaPipeline(progress=_print_progress)
-    results = pipeline.process(
-        ProcessOptions(
-            source_type=args.source,
-            raw_input=args.url,
-            output_dir=get_output_dir(),
-            transcribe=not args.no_transcribe,
-            model_name=args.model or get_model_name(),
-            language=args.language if args.language is not None else get_whisper_language(),
-            delay_seconds=args.delay,
+    progress = SpinnerProgress()
+    try:
+        pipeline = MediaPipeline(progress=progress)
+        results = pipeline.process(
+            ProcessOptions(
+                source_type=args.source,
+                raw_input=args.url,
+                output_dir=get_output_dir(),
+                transcribe=not args.no_transcribe,
+                model_name=args.model or get_model_name(),
+                language=args.language if args.language is not None else get_whisper_language(),
+                delay_seconds=args.delay,
+            )
         )
-    )
+    finally:
+        progress.stop()
     _print_results(results)
     return 1 if any(result.error for result in results) else 0
 

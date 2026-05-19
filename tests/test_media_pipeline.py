@@ -10,7 +10,13 @@ from pathlib import Path
 from media_information_download.audio import convert_to_mp3
 from media_information_download.sources.rss import parse_feed_xml
 from media_information_download.sources.youtube import validate_url
-from media_information_download.tui import DOWN, ESCAPE, UP, _key_from_escape_sequence
+from media_information_download.tui import (
+    DOWN,
+    ESCAPE,
+    UP,
+    SpinnerProgress,
+    _key_from_escape_sequence,
+)
 
 
 class MediaPipelineTests(unittest.TestCase):
@@ -27,6 +33,15 @@ class MediaPipelineTests(unittest.TestCase):
         self.assertEqual(_key_from_escape_sequence("[1;5A"), UP)
         self.assertEqual(_key_from_escape_sequence("[1;5B"), DOWN)
         self.assertEqual(_key_from_escape_sequence("[C"), ESCAPE)
+
+    def test_spinner_progress_detects_long_running_stages(self) -> None:
+        self.assertTrue(SpinnerProgress._is_active_message("[1/2] Downloading: Example"))
+        self.assertTrue(SpinnerProgress._is_active_message("Converting to MP3: Example.mp4"))
+        self.assertTrue(SpinnerProgress._is_active_message("Transcribing: Example.mp3"))
+        self.assertTrue(SpinnerProgress._is_terminal_message("Downloaded: Example.mp4"))
+        self.assertTrue(SpinnerProgress._is_terminal_message("MP3 ready: Example.mp3"))
+        self.assertTrue(SpinnerProgress._is_terminal_message("Transcript written: Example.md"))
+        self.assertFalse(SpinnerProgress._is_active_message("Found 1 media item(s)."))
 
     def test_rss_parser_extracts_supported_enclosure(self) -> None:
         feed = b"""<?xml version="1.0"?>

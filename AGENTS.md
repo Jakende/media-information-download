@@ -59,6 +59,8 @@ Keep these entry points working:
 
 The interactive TUI should keep selectable options navigable with Up/Down and Enter. Navigation controls should always be shown as a footer at the bottom of the active menu or submenu. Backspace should go back from submenus or choice screens. Escape should cancel/back from submenus and quit from the main menu. Free-form URL input may remain text entry, but its screen must still show controls and support Backspace/Escape as back actions.
 
+Long-running processing stages should provide visible feedback in the terminal. Keep the spinner active for download, MP3 conversion, and transcription stages, and stop it before printing completed/error status lines.
+
 ## Verification
 
 Before handing off substantial changes, run:

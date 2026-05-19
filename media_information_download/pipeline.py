@@ -80,6 +80,7 @@ class MediaPipeline:
                 result.downloaded_path = downloaded_path
                 self.progress(f"Downloaded: {downloaded_path.name}")
 
+                self.progress(f"Converting to MP3: {downloaded_path.name}")
                 mp3_path = convert_to_mp3(downloaded_path, output_dir)
                 result.mp3_path = mp3_path
                 self.progress(f"MP3 ready: {mp3_path.name}")
