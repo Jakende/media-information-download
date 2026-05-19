@@ -99,6 +99,24 @@ def _prompt(label: str) -> str:
     return input(_color(f"{label} ", Style.bold + Style.blue)).strip()
 
 
+def _navigation_hint(
+    extra: str | None = None,
+    escape_label: str = "Back",
+    include_arrows: bool = True,
+) -> str:
+    parts = []
+    if extra:
+        parts.append(extra)
+    if include_arrows:
+        parts.append("Up/Down: move")
+        parts.append("Enter: select")
+    else:
+        parts.append("Enter: continue")
+    parts.append("Backspace: back")
+    parts.append(f"Esc: {escape_label}")
+    return "  ".join(parts)
+
+
 def _read_key() -> str:
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
@@ -179,7 +197,7 @@ def _select(
             else:
                 print(line)
         print()
-        print(_color("Up/Down: move  Enter: select  Backspace: back  Esc: " + escape_label, Style.dim))
+        print(_color(_navigation_hint(escape_label=escape_label), Style.dim))
 
         key = _read_key()
         if key == UP:
@@ -196,6 +214,46 @@ def _select(
             numeric = int(key) - 1
             if 0 <= numeric < len(options):
                 return numeric
+
+
+def _text_entry(title: str, label: str) -> str | None:
+    if not sys.stdin.isatty():
+        value = _prompt(label)
+        return value or None
+
+    value = ""
+    while True:
+        _clear_screen()
+        _banner()
+        print(_rule(title))
+        print(
+            _color(
+                _navigation_hint(
+                    "Type or paste text",
+                    escape_label="Back",
+                    include_arrows=False,
+                ),
+                Style.dim,
+            )
+        )
+        print()
+        print(_color(label, Style.bold + Style.blue))
+        print(value)
+
+        key = _read_key()
+        if key == ENTER:
+            return value.strip() or None
+        if key in {BACK, ESCAPE}:
+            return None
+        if key in {UP, DOWN}:
+            continue
+        if key == "\x15":
+            value = ""
+            continue
+        if key == "\x03":
+            raise KeyboardInterrupt
+        if key.isprintable():
+            value += key
 
 
 def _print_progress(message: str) -> None:
@@ -256,12 +314,8 @@ def _print_results(results) -> None:
 
 def _process_source(source_type: str) -> None:
     label = "YouTube URL(s)" if source_type == "youtube" else "RSS feed URL"
-    _clear_screen()
-    _banner()
-    print("\n" + _rule(label))
-    raw_input = _prompt(f"{label}:")
+    raw_input = _text_entry(label, f"{label}:")
     if not raw_input:
-        print(_color("No input provided.", Style.yellow))
         return
 
     transcribe = _yes_no("Run transcription after download", default=True)

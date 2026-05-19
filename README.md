@@ -51,6 +51,7 @@ Keyboard controls:
 - Enter: select
 - Backspace: go back from a submenu or choice screen
 - Escape: cancel/back from submenus; quit from the main menu
+- URL entry screens show their own controls: type or paste text, Enter continues, Backspace/Escape goes back
 
 ## Non-Interactive Usage
 
