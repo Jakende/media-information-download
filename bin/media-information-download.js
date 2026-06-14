@@ -21,6 +21,7 @@ function run(command, args, options = {}) {
     stdio: options.stdio || "inherit",
     env: {
       ...process.env,
+      MEDIA_INFORMATION_DOWNLOAD_VENV: venvRoot,
       PYTHONPATH: packageRoot,
     },
   });

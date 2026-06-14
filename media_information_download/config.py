@@ -55,6 +55,11 @@ def get_cookies_from_browser() -> tuple[str, ...] | None:
 
 def is_project_venv_active() -> bool:
     active_prefix = Path(sys.prefix).resolve()
+    npm_venv = os.environ.get("MEDIA_INFORMATION_DOWNLOAD_VENV", "").strip()
+    if npm_venv:
+        expected_venv = Path(npm_venv).expanduser().resolve()
+        return active_prefix == expected_venv or expected_venv in active_prefix.parents
+
     project_venv = (PROJECT_ROOT / ".venv").resolve()
     return active_prefix == project_venv or project_venv in active_prefix.parents
 

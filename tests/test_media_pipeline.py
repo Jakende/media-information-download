@@ -7,8 +7,10 @@ import unittest
 import wave
 import os
 from pathlib import Path
+from unittest import mock
 
 from media_information_download.audio import convert_to_mp3
+from media_information_download.config import is_project_venv_active
 from media_information_download.sources.rss import parse_feed_xml
 from media_information_download.sources.youtube import parse_urls, validate_url
 from media_information_download.tui import (
@@ -82,6 +84,13 @@ class MediaPipelineTests(unittest.TestCase):
         self.assertEqual(small[1], 2)
         self.assertGreater(large[2], small[2])
         self.assertGreater(large[3], small[3])
+
+    def test_npm_venv_environment_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            venv_path = Path(tmp).resolve()
+            with mock.patch.dict(os.environ, {"MEDIA_INFORMATION_DOWNLOAD_VENV": str(venv_path)}):
+                with mock.patch("media_information_download.config.sys.prefix", str(venv_path)):
+                    self.assertTrue(is_project_venv_active())
 
     def test_rss_parser_extracts_supported_enclosure(self) -> None:
         feed = b"""<?xml version="1.0"?>
