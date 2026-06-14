@@ -69,7 +69,7 @@ media-info-download
 The package is also published as an npm CLI wrapper. It still requires Python 3.10+ and ffmpeg on `PATH`.
 
 ```bash
-npm install -g @jakende/media-information-download
+npm install -g @jakende/media-info-cli
 media-information-download
 ```
 
