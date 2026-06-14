@@ -1,11 +1,12 @@
 {
   "name": "@jakende/media-info-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Terminal app for downloading media from YouTube or RSS feeds, converting to MP3, and generating Whisper transcripts.",
   "license": "UNLICENSED",
   "bin": {
     "media-information-download": "bin/media-information-download.js",
-    "media-info-download": "bin/media-information-download.js"
+    "media-info-download": "bin/media-information-download.js",
+    "media-info-cli": "bin/media-information-download.js"
   },
   "files": [
     "bin/",

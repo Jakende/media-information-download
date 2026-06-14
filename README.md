@@ -8,6 +8,20 @@ Terminal application for downloading media from YouTube URLs or RSS feeds, conve
 - ffmpeg on PATH
 - A terminal with ANSI escape support for the framed TUI. macOS Terminal, iTerm2, Windows Terminal, and current PowerShell terminals are supported.
 
+macOS:
+
+```bash
+brew install ffmpeg
+ffmpeg -version
+```
+
+Windows:
+
+```powershell
+winget install Gyan.FFmpeg
+ffmpeg -version
+```
+
 Python dependencies are installed into the project-local `.venv` folder. Run commands from this folder so the local environment is used.
 
 ## macOS Setup
@@ -62,6 +76,7 @@ After editable install, these console commands are available inside the active e
 ```bash
 media-information-download
 media-info-download
+media-info-cli
 ```
 
 ## npm Install
@@ -70,7 +85,7 @@ The package is also published as an npm CLI wrapper. It still requires Python 3.
 
 ```bash
 npm install -g @jakende/media-info-cli
-media-information-download
+media-info-cli
 ```
 
 On first run, the npm wrapper creates a Python virtual environment in `~/.media-information-download/venv` and installs the Python dependencies there. To use a different venv location:
@@ -102,6 +117,7 @@ If the project is installed into the active environment, you can also run:
 
 ```bash
 media-information-download
+media-info-cli
 ```
 
 The TUI lets you choose YouTube or RSS input, start downloads, watch progress messages, trigger transcription, and list or open generated files.
