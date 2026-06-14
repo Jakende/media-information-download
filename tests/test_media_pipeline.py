@@ -62,6 +62,13 @@ class MediaPipelineTests(unittest.TestCase):
         self.assertTrue(SpinnerProgress._is_terminal_message("Transcript written: Example.md"))
         self.assertFalse(SpinnerProgress._is_active_message("Found 1 media item(s)."))
 
+    def test_spinner_progress_formats_active_status(self) -> None:
+        self.assertEqual(SpinnerProgress._active_phase("[1/2] Downloading: Example"), "DOWNLOADING")
+        self.assertEqual(SpinnerProgress._active_label("DOWNLOADING"), "TUNING IN")
+        self.assertEqual(SpinnerProgress._active_label("CONVERTING TO MP3"), "MIXING AUDIO")
+        self.assertEqual(SpinnerProgress._active_label("TRANSCRIBING"), "WRITING WORDS")
+        self.assertEqual(SpinnerProgress._active_detail("[1/2] Downloading: Example"), "Downloading: Example")
+
     def test_text_entry_sanitizes_pasted_control_sequences(self) -> None:
         self.assertEqual(
             _sanitize_text_entry("https://www.youtube.com/watch?v=abc123\x1b[201~"),

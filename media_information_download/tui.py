@@ -500,10 +500,24 @@ def _print_progress(message: str) -> None:
 
 class SpinnerProgress:
     frames = (
-        "[#####-----]",
-        "[--#####---]",
-        "[----#####-]",
-        "[---#####--]",
+        "[>---------]",
+        "[->--------]",
+        "[-->-------]",
+        "[--->------]",
+        "[---->-----]",
+        "[----->----]",
+        "[------>---]",
+        "[------->--]",
+        "[-------->-]",
+        "[--------->]",
+        "[--------<-]",
+        "[-------<--]",
+        "[------<---]",
+        "[-----<----]",
+        "[----<-----]",
+        "[---<------]",
+        "[--<-------]",
+        "[-<--------]",
     )
     active_prefixes = (
         "Downloading:",
@@ -572,13 +586,15 @@ class SpinnerProgress:
             frame = self.frames[self._frame_index % len(self.frames)]
             self._frame_index += 1
             self._render_active(message, frame=frame)
-            self._stop_event.wait(0.18)
+            self._stop_event.wait(0.10)
 
     def _render_active(self, message: str, frame: str | None = None) -> None:
         frame = frame or self.frames[self._frame_index % len(self.frames)]
         phase = self._active_phase(message)
-        _viewport_line(0, f"WORKING {frame} {phase}", Style.bold + Style.cyan)
-        _viewport_line(1, message, Style.cyan)
+        label = self._active_label(phase)
+        detail = self._active_detail(message)
+        _viewport_line(0, f"{label:<18} {frame} {phase}", Style.bold + Style.cyan)
+        _viewport_line(1, detail, Style.cyan)
 
     def _append_log(self, message: str) -> None:
         self._log_messages.append(message)
@@ -600,6 +616,23 @@ class SpinnerProgress:
     def _active_phase(message: str) -> str:
         stripped = message.split("] ", maxsplit=1)[-1]
         return stripped.split(":", maxsplit=1)[0].upper()
+
+    @staticmethod
+    def _active_detail(message: str) -> str:
+        stripped = message.split("] ", maxsplit=1)[-1]
+        if ":" not in stripped:
+            return message
+        phase, detail = stripped.split(":", maxsplit=1)
+        return f"{phase.strip()}: {detail.strip()}"
+
+    @staticmethod
+    def _active_label(phase: str) -> str:
+        labels = {
+            "DOWNLOADING": "TUNING IN",
+            "CONVERTING TO MP3": "MIXING AUDIO",
+            "TRANSCRIBING": "WRITING WORDS",
+        }
+        return labels.get(phase, "WORKING")
 
     @staticmethod
     def _format_log_message(message: str) -> str:

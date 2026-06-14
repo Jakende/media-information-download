@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "media-information-download"
-version = "0.1.4"
+version = "0.1.5"
 description = "Terminal app for downloading media from YouTube or RSS feeds, converting to MP3, and generating Whisper transcripts."
 readme = "README.md"
 license = { text = "MIT" }
