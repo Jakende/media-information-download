@@ -1,0 +1,36 @@
+{
+  "name": "media-information-download",
+  "version": "0.1.0",
+  "description": "Terminal app for downloading media from YouTube or RSS feeds, converting to MP3, and generating Whisper transcripts.",
+  "license": "UNLICENSED",
+  "bin": {
+    "media-information-download": "bin/media-information-download.js",
+    "media-info-download": "bin/media-information-download.js"
+  },
+  "files": [
+    "bin/",
+    "media_information_download/**/*.py",
+    "media_tui.py",
+    "youtube_download.py",
+    "youtube_download_transcribe.py",
+    "requirements.txt",
+    "requirements-transcribe.txt",
+    "pyproject.toml",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "python3 -m unittest discover -s tests",
+    "pack:check": "npm pack --dry-run"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jakende/media-information-download.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Jakende/media-information-download/issues"
+  },
+  "homepage": "https://github.com/Jakende/media-information-download#readme"
+}

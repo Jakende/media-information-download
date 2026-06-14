@@ -16,7 +16,7 @@ def validate_url(url: str) -> bool:
 
 
 def parse_urls(raw_value: str) -> list[str]:
-    return [part.strip() for part in raw_value.split(",") if part.strip()]
+    return [part.strip() for part in re.split(r"[\s,]+", raw_value) if part.strip()]
 
 
 class YouTubeSource:

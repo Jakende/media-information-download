@@ -10,7 +10,7 @@ from pathlib import Path
 
 from media_information_download.audio import convert_to_mp3
 from media_information_download.sources.rss import parse_feed_xml
-from media_information_download.sources.youtube import validate_url
+from media_information_download.sources.youtube import parse_urls, validate_url
 from media_information_download.tui import (
     DOWN,
     ESCAPE,
@@ -27,6 +27,20 @@ class MediaPipelineTests(unittest.TestCase):
         self.assertTrue(validate_url("https://www.youtube.com/watch?v=abcdefghijk"))
         self.assertTrue(validate_url("https://youtu.be/abcdefghijk"))
         self.assertFalse(validate_url("https://example.com/video"))
+
+    def test_youtube_url_parser_accepts_pasted_lists(self) -> None:
+        self.assertEqual(
+            parse_urls(
+                "https://youtu.be/abcdefghijk,\n"
+                "https://www.youtube.com/watch?v=lmnopqrstuv "
+                "https://youtu.be/wxyzabcdefg"
+            ),
+            [
+                "https://youtu.be/abcdefghijk",
+                "https://www.youtube.com/watch?v=lmnopqrstuv",
+                "https://youtu.be/wxyzabcdefg",
+            ],
+        )
 
     def test_tui_arrow_escape_sequences_do_not_map_to_escape(self) -> None:
         self.assertEqual(_key_from_escape_sequence("[A"), UP)
@@ -54,6 +68,10 @@ class MediaPipelineTests(unittest.TestCase):
         self.assertEqual(
             _sanitize_text_entry("\x1b[200~https://youtu.be/abc\x1b[201~"),
             "https://youtu.be/abc",
+        )
+        self.assertEqual(
+            _sanitize_text_entry("https://youtu.be/abc\r\nhttps://youtu.be/def"),
+            "https://youtu.be/abc,https://youtu.be/def",
         )
         self.assertEqual(_sanitize_text_entry("https://youtu.be/abc\x7f"), "https://youtu.be/abc")
 

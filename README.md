@@ -5,13 +5,24 @@ Terminal application for downloading media from YouTube URLs or RSS feeds, conve
 ## Requirements
 
 - Python 3.10+
-- ffmpeg on PATH, for example `brew install ffmpeg`
+- ffmpeg on PATH
+- A terminal with ANSI escape support for the framed TUI. macOS Terminal, iTerm2, Windows Terminal, and current PowerShell terminals are supported.
 
 Python dependencies are installed into the project-local `.venv` folder. Run commands from this folder so the local environment is used.
 
-## Setup
+## macOS Setup
+
+Option 1, installer script:
 
 ```bash
+zsh scripts/install_macos.sh
+./run.sh
+```
+
+Option 2, manual setup:
+
+```bash
+brew install ffmpeg
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-transcribe.txt
@@ -22,6 +33,50 @@ Optional editable install:
 ```bash
 source .venv/bin/activate
 pip install -e ".[transcribe]"
+```
+
+## Windows Setup
+
+Use Windows Terminal or PowerShell. Install Python 3.10+ and ffmpeg first, then use the local project environment.
+
+Option 1, installer script:
+
+```powershell
+winget install Python.Python.3.12
+winget install Gyan.FFmpeg
+powershell -ExecutionPolicy Bypass -File .\scripts\install_windows.ps1
+.\run.ps1
+```
+
+Option 2, manual setup:
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-transcribe.txt
+.\.venv\Scripts\python.exe -m pip install -e ".[transcribe]"
+.\.venv\Scripts\python.exe media_tui.py
+```
+
+After editable install, these console commands are available inside the active environment on both platforms:
+
+```bash
+media-information-download
+media-info-download
+```
+
+## npm Install
+
+The package is also published as an npm CLI wrapper. It still requires Python 3.10+ and ffmpeg on `PATH`.
+
+```bash
+npm install -g media-information-download
+media-information-download
+```
+
+On first run, the npm wrapper creates a Python virtual environment in `~/.media-information-download/venv` and installs the Python dependencies there. To use a different venv location:
+
+```bash
+MEDIA_INFORMATION_DOWNLOAD_VENV=/path/to/venv media-information-download
 ```
 
 ## TUI
@@ -37,7 +92,13 @@ source .venv/bin/activate
 python3 media_tui.py
 ```
 
-If the project wrapper is linked into your zsh `PATH`, you can also run:
+On Windows:
+
+```powershell
+.\run.ps1
+```
+
+If the project is installed into the active environment, you can also run:
 
 ```bash
 media-information-download
@@ -55,7 +116,14 @@ Keyboard controls:
 - Backspace: go back from a submenu or choice screen
 - Escape: cancel/back from submenus; quit from the main menu
 - URL entry screens show their own controls: type or paste text, Enter continues, Backspace/Escape goes back
-- Paste is supported in URL entry screens, including terminal bracketed paste and macOS clipboard paste
+- Paste is supported in URL entry screens, including terminal bracketed paste, macOS clipboard paste, and Windows clipboard paste with Ctrl+V in PowerShell/Windows Terminal
+
+For multiple YouTube URLs, separate entries with commas, spaces, or line breaks:
+
+```text
+https://youtu.be/VIDEO_ONE
+https://www.youtube.com/watch?v=VIDEO_TWO, https://youtu.be/VIDEO_THREE
+```
 
 ## Non-Interactive Usage
 

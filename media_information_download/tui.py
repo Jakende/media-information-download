@@ -2,16 +2,26 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import ctypes
 import os
 import select
 import shutil
 import subprocess
 import sys
-import termios
 import threading
 import time
-import tty
 from pathlib import Path
+
+if os.name == "nt":
+    import msvcrt
+
+    termios = None
+    tty = None
+else:
+    import termios
+    import tty
+
+    msvcrt = None
 
 from media_information_download.config import (
     dependency_status,
@@ -234,10 +244,16 @@ def _drain_available_text(fd: int) -> str:
 
 
 def _read_clipboard() -> str:
-    if sys.platform != "darwin":
+    command = None
+    if sys.platform == "darwin":
+        command = ["pbpaste"]
+    elif sys.platform == "win32":
+        command = ["powershell", "-NoProfile", "-Command", "Get-Clipboard -Raw"]
+    if command is None:
         return ""
+
     result = subprocess.run(
-        ["pbpaste"],
+        command,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,
@@ -248,6 +264,8 @@ def _read_clipboard() -> str:
 
 def _sanitize_text_entry(value: str) -> str:
     value = value.replace("\x1b[200~", "").replace("\x1b[201~", "")
+    value = value.replace("\r\n", "\n").replace("\r", "\n")
+    value = value.replace("\n", ",").replace("\t", ",")
     return "".join(
         char
         for char in value
@@ -266,8 +284,10 @@ def _suppress_external_output(enabled: bool):
             yield
 
 
-def _read_key(*, text_mode: bool = False) -> str:
+def _read_key_posix(*, text_mode: bool = False) -> str:
     fd = sys.stdin.fileno()
+    if termios is None or tty is None:
+        raise RuntimeError("POSIX terminal input is not available on this platform.")
     old_settings = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
@@ -306,6 +326,60 @@ def _read_key(*, text_mode: bool = False) -> str:
         return char
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+
+def _drain_available_windows_text() -> str:
+    if msvcrt is None:
+        return ""
+
+    data = ""
+    while msvcrt.kbhit():
+        char = msvcrt.getwch()
+        if char in {"\x00", "\xe0"}:
+            if msvcrt.kbhit():
+                msvcrt.getwch()
+            continue
+        if char == "\x03":
+            raise KeyboardInterrupt
+        data += "\n" if char in {"\r", "\n"} else char
+    return data
+
+
+def _read_key_windows(*, text_mode: bool = False) -> str:
+    if msvcrt is None:
+        raise RuntimeError("Windows terminal input is not available on this platform.")
+
+    char = msvcrt.getwch()
+    if char in {"\x00", "\xe0"}:
+        code = msvcrt.getwch()
+        if code == "H":
+            return UP
+        if code == "P":
+            return DOWN
+        return ESCAPE
+    if char == "\x03":
+        raise KeyboardInterrupt
+    if char == "\x1b":
+        return ESCAPE
+    if char in {"\r", "\n"}:
+        return ENTER
+    if char == "\x08":
+        return BACK
+    if text_mode and char == "\x16":
+        return _read_clipboard()
+    if not text_mode and char.lower() == "k":
+        return UP
+    if not text_mode and char.lower() == "j":
+        return DOWN
+    if text_mode and (char.isprintable() or char in {"\t"}):
+        return char + _drain_available_windows_text()
+    return char
+
+
+def _read_key(*, text_mode: bool = False) -> str:
+    if os.name == "nt":
+        return _read_key_windows(text_mode=text_mode)
+    return _read_key_posix(text_mode=text_mode)
 
 
 def _key_from_escape_sequence(sequence: str) -> str:
@@ -843,6 +917,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    _enable_virtual_terminal_processing()
     args = parse_args()
     if args.source or args.url:
         if not args.source or not args.url:
@@ -850,6 +925,17 @@ def main() -> int:
             return 2
         return run_non_interactive(args)
     return run_tui()
+
+
+def _enable_virtual_terminal_processing() -> None:
+    if os.name != "nt":
+        return
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.GetStdHandle(-11)
+    mode = ctypes.c_uint32()
+    if handle == ctypes.c_void_p(-1).value or not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+        return
+    kernel32.SetConsoleMode(handle, mode.value | 0x0004)
 
 
 if __name__ == "__main__":
