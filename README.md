@@ -201,3 +201,7 @@ All generated audio is saved as `.mp3`. Non-MP3 RSS downloads are converted and 
 - `media_information_download/tui.py`: terminal UI and non-interactive CLI entry point
 
 This structure keeps new media sources or formats isolated to source handlers, downloaders, and supported format lists.
+
+## License
+
+MIT. See `LICENSE`.

@@ -1,8 +1,8 @@
 {
   "name": "@jakende/media-info-cli",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Terminal app for downloading media from YouTube or RSS feeds, converting to MP3, and generating Whisper transcripts.",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "bin": {
     "media-information-download": "bin/media-information-download.js",
     "media-info-download": "bin/media-information-download.js",
@@ -17,6 +17,7 @@
     "requirements.txt",
     "requirements-transcribe.txt",
     "pyproject.toml",
+    "LICENSE",
     "README.md"
   ],
   "scripts": {
