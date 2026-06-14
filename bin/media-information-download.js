@@ -10,10 +10,14 @@ const packageRoot = path.resolve(__dirname, "..");
 const venvRoot = process.env.MEDIA_INFORMATION_DOWNLOAD_VENV
   ? path.resolve(process.env.MEDIA_INFORMATION_DOWNLOAD_VENV)
   : path.join(os.homedir(), ".media-information-download", "venv");
+const outputRoot = process.env.MEDIA_OUTPUT_DIR
+  ? path.resolve(process.env.MEDIA_OUTPUT_DIR)
+  : path.join(os.homedir(), ".media-information-download", "output");
 const isWindows = process.platform === "win32";
 const venvPython = isWindows
   ? path.join(venvRoot, "Scripts", "python.exe")
   : path.join(venvRoot, "bin", "python");
+const desktopAliasArgs = new Set(["--desktop-output-alias", "--create-desktop-output-alias"]);
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -21,6 +25,7 @@ function run(command, args, options = {}) {
     stdio: options.stdio || "inherit",
     env: {
       ...process.env,
+      MEDIA_OUTPUT_DIR: outputRoot,
       MEDIA_INFORMATION_DOWNLOAD_VENV: venvRoot,
       PYTHONPATH: packageRoot,
     },
@@ -92,11 +97,57 @@ function warnIfFfmpegMissing() {
   }
 }
 
+function splitWrapperArgs(args) {
+  return {
+    createDesktopOutputAlias: args.some((arg) => desktopAliasArgs.has(arg)),
+    appArgs: args.filter((arg) => !desktopAliasArgs.has(arg)),
+  };
+}
+
+function pathToFileUrl(value) {
+  return `file:///${value.replace(/\\/g, "/").replace(/^\/+/, "")}`;
+}
+
+function createDesktopOutputAlias() {
+  const desktopPath = path.join(os.homedir(), "Desktop");
+  const aliasName = "Media Information Download Output";
+  const aliasPath = path.join(desktopPath, aliasName);
+
+  fs.mkdirSync(outputRoot, { recursive: true });
+  fs.mkdirSync(desktopPath, { recursive: true });
+  if (fs.existsSync(aliasPath)) {
+    console.log(`Output alias already exists: ${aliasPath}`);
+    return;
+  }
+
+  if (isWindows) {
+    const command = `mklink /J "${aliasPath}" "${outputRoot}"`;
+    const result = spawnSync("cmd", ["/d", "/s", "/c", command], { stdio: "ignore" });
+    if (result.status === 0) {
+      console.log(`Created output alias: ${aliasPath}`);
+      return;
+    }
+
+    const shortcutPath = `${aliasPath}.url`;
+    fs.writeFileSync(shortcutPath, `[InternetShortcut]\nURL=${pathToFileUrl(outputRoot)}\n`, "utf8");
+    console.log(`Created output shortcut: ${shortcutPath}`);
+    return;
+  }
+
+  fs.symlinkSync(outputRoot, aliasPath, "dir");
+  console.log(`Created output alias: ${aliasPath}`);
+}
+
+const wrapperArgs = splitWrapperArgs(process.argv.slice(2));
+
 ensureVenv();
 ensureDependencies();
 warnIfFfmpegMissing();
+if (wrapperArgs.createDesktopOutputAlias) {
+  createDesktopOutputAlias();
+}
 
-const child = run(venvPython, [path.join(packageRoot, "media_tui.py"), ...process.argv.slice(2)]);
+const child = run(venvPython, [path.join(packageRoot, "media_tui.py"), ...wrapperArgs.appArgs]);
 if (child.signal) {
   process.kill(process.pid, child.signal);
 }

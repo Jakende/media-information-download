@@ -88,10 +88,19 @@ npm install -g @jakende/media-info-cli
 media-info-cli
 ```
 
-On first run, the npm wrapper creates a Python virtual environment in `~/.media-information-download/venv` and installs the Python dependencies there. To use a different venv location:
+On first run, the npm wrapper creates a Python virtual environment in `~/.media-information-download/venv` and installs the Python dependencies there. Npm installs write generated media and transcripts to `~/.media-information-download/output` by default.
+
+To create a Desktop alias/shortcut to the output folder:
+
+```bash
+media-info-cli --desktop-output-alias
+```
+
+To use a different venv or output location:
 
 ```bash
 MEDIA_INFORMATION_DOWNLOAD_VENV=/path/to/venv media-information-download
+MEDIA_OUTPUT_DIR=/path/to/output media-information-download
 ```
 
 ## TUI
